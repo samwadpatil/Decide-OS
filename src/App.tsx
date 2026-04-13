@@ -6,8 +6,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
 // ─── DECISION ENGINE LOGIC ──────────────────────────────────────────────────
 
 const DECISION_TYPES = {
@@ -108,6 +106,20 @@ User's input: "${decision.query}"`;
 
 async function callGemini(messages: any[]) {
   try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return { 
+        phase: "output", 
+        isRejected: true, 
+        recommendation: "API Key is missing. Please add your GEMINI_API_KEY to your Vercel environment variables and redeploy.", 
+        reasoning: "", 
+        tradeoffs: "", 
+        alternative: "" 
+      };
+    }
+
+    const ai = new GoogleGenAI({ apiKey });
+
     const geminiMessages = messages.map(m => ({
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }]
@@ -128,7 +140,7 @@ async function callGemini(messages: any[]) {
     return JSON.parse(cleaned);
   } catch (error) {
     console.error("Gemini API Error:", error);
-    return { phase: "output", recommendation: "Error connecting to AI.", reasoning: "", tradeoffs: "", alternative: "" };
+    return { phase: "output", isRejected: true, recommendation: "Error connecting to AI. Please check your API key and try again.", reasoning: "", tradeoffs: "", alternative: "" };
   }
 }
 
