@@ -40,9 +40,13 @@ function classifyDecision(text: string) {
 }
 
 function buildSystemPrompt() {
-  return `You are the Universal Decision Engine — a structured, intelligent decision system. You are NOT a chatbot. You give structured, context-aware, human-like reasoning tailored to the decision type.
+  return `You are the Universal Decision Engine — a structured, intelligent decision system. You are NOT a chatbot.
 
-DECISION TYPE RULES:
+CRITICAL RULES FOR INVALID INPUTS:
+1. GREETINGS & GIBBERISH: If the user says "hi", "hello", "wassup", or types random gibberish, you MUST reject it. Set isRejected=true, phase="output", recommendation="I am a decision engine, not a chatbot. Please tell me about a choice or dilemma you are facing.", and leave all other fields empty.
+2. UNETHICAL & TROLLING: If the user asks something illegal, harmful, unethical, gross, or obvious trolling (e.g., "should I eat poop"), you MUST reject it. Set isRejected=true, phase="output", recommendation="I cannot help with this request. Please ask a serious question about a valid decision.", and leave all other fields empty.
+
+DECISION TYPE RULES (Only apply if isRejected=false):
 - LOGICAL: Use criteria + weighted scoring. Give clear recommendation with trade-offs.
 - EMOTIONAL: Do NOT give immediate yes/no. Ask 3-4 reflective questions first, then give nuanced recommendation.
 - IMPULSE: Identify short-term reward vs long-term cost. Bias toward long-term wellbeing. Coach-like tone.
@@ -59,6 +63,7 @@ PHASE RULES:
 OUTPUT FORMAT — respond ONLY with valid JSON, no markdown, no backticks:
 {
   "phase": "gather" or "output",
+  "isRejected": boolean,
   "questions": ["q1","q2","q3"],
   "recommendation": "clear recommendation text",
   "reasoning": "explain based on context and user patterns",
@@ -68,8 +73,9 @@ OUTPUT FORMAT — respond ONLY with valid JSON, no markdown, no backticks:
 }
 
 Rules:
+- If isRejected=true: provide recommendation only.
 - If phase=gather: provide questions array only (2-4 questions max)
-- If phase=output: provide recommendation, reasoning, tradeoffs, alternative (insight is optional)
+- If phase=output and isRejected=false: provide recommendation, reasoning, tradeoffs, alternative (insight is optional)
 - Keep text concise, warm, specific. No generic advice. No filler sentences.`;
 }
 
@@ -83,19 +89,21 @@ function buildUserMessage(decision: any, userProfile: any, history: any[]) {
       : "";
 
   const typeInstructions: Record<string, string> = {
-    logical: `Decision type: LOGICAL. Use structured criteria + weighted scoring. Ask about options if not clear. Calculate trade-offs explicitly.`,
-    emotional: `Decision type: EMOTIONAL. This involves feelings. First gather context with 3-4 reflective questions. Then give nuanced guidance with next steps.`,
-    impulse: `Decision type: IMPULSE. Identify the short-term urge vs long-term cost. Strongly favor long-term wellbeing. Be supportive like a coach.`,
-    preference: `Decision type: PREFERENCE. Quick heuristics only. If context is missing, ask 2-3 targeted questions (mood/energy/group/environment). Then give quick rec + alternative.`,
-    ambiguous: `Decision type: AMBIGUOUS. Do NOT force an answer. Reframe and ask 2-3 guiding questions to help clarify what the user actually wants.`,
+    logical: `Suggested type: LOGICAL. Use structured criteria + weighted scoring. Ask about options if not clear. Calculate trade-offs explicitly.`,
+    emotional: `Suggested type: EMOTIONAL. This involves feelings. First gather context with 3-4 reflective questions. Then give nuanced guidance with next steps.`,
+    impulse: `Suggested type: IMPULSE. Identify the short-term urge vs long-term cost. Strongly favor long-term wellbeing. Be supportive like a coach.`,
+    preference: `Suggested type: PREFERENCE. Quick heuristics only. If context is missing, ask 2-3 targeted questions (mood/energy/group/environment). Then give quick rec + alternative.`,
+    ambiguous: `Suggested type: AMBIGUOUS. Do NOT force an answer. Reframe and ask 2-3 guiding questions to help clarify what the user actually wants.`,
   };
 
-  return `${typeInstructions[decision.type]}
+  return `(Note: First evaluate if this is a valid decision. If it is a greeting, gibberish, or unethical, reject it immediately setting isRejected=true.)
+
+${typeInstructions[decision.type] || ""}
 
 ${profileStr}
 ${historyStr}
 
-User's question: "${decision.query}"`;
+User's input: "${decision.query}"`;
 }
 
 async function callGemini(messages: any[]) {
@@ -304,6 +312,7 @@ const css = `
   .t-impulse { background: rgba(255,170,106,0.1); color: var(--impulse); border: 1px solid rgba(255,170,106,0.25); }
   .t-preference { background: rgba(106,255,212,0.1); color: var(--preference); border: 1px solid rgba(106,255,212,0.25); }
   .t-ambiguous { background: rgba(196,106,255,0.1); color: var(--ambiguous); border: 1px solid rgba(196,106,255,0.25); }
+  .t-rejected { background: rgba(92,92,122,0.1); color: var(--muted); border: 1px solid rgba(92,92,122,0.25); }
 
   /* LOADING */
   .loading {
@@ -508,6 +517,68 @@ const css = `
   ::-webkit-scrollbar { width: 3px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  /* MOBILE RESPONSIVENESS */
+  @media (max-width: 640px) {
+    .header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 16px 20px;
+    }
+    .header > .header-right {
+      width: 100%;
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+    .nav {
+      width: 100%;
+      justify-content: space-between;
+    }
+    .nav-btn {
+      flex: 1;
+      text-align: center;
+      padding: 8px 10px;
+      font-size: 12px;
+    }
+    .onboard {
+      padding: 40px 20px 30px;
+    }
+    h1 {
+      font-size: 32px;
+    }
+    .engine, .section {
+      padding: 24px 16px;
+    }
+    .q-input {
+      font-size: 16px; /* Prevents iOS/Android auto-zoom */
+      padding: 16px 50px 16px 16px;
+    }
+    .submit-btn {
+      width: 44px;
+      height: 44px;
+      right: 6px;
+      bottom: 6px;
+    }
+    .stats-row {
+      flex-direction: column;
+    }
+    .priority-chip {
+      padding: 6px 12px;
+    }
+    .modal {
+      padding: 20px;
+    }
+    .pq-opts {
+      gap: 6px;
+    }
+    .pq-opt {
+      padding: 8px 12px;
+      font-size: 12px;
+      flex: 1 1 calc(50% - 6px);
+      text-align: center;
+    }
+  }
 `;
 
 const TYPE_META: Record<string, any> = {
@@ -516,6 +587,7 @@ const TYPE_META: Record<string, any> = {
   impulse:    { label: "Impulse Decision",     emoji: "⚡", cls: "t-impulse",    dot: "var(--impulse)" },
   preference: { label: "Preference Decision",  emoji: "✨", cls: "t-preference", dot: "var(--preference)" },
   ambiguous:  { label: "Open-Ended",           emoji: "🔭", cls: "t-ambiguous",  dot: "var(--ambiguous)" },
+  rejected:   { label: "Invalid Request",      emoji: "🚫", cls: "t-rejected",   dot: "var(--muted)" },
 };
 
 // ─── PAUSE TIMER ─────────────────────────────────────────────────────────────
@@ -657,10 +729,14 @@ export default function App() {
   function finalize(dec: any, result: any) {
     setOutput(result);
     setPhase("output");
+    const finalType = result.isRejected ? "rejected" : dec.type;
+    if (result.isRejected) {
+      setDecision({ ...dec, type: "rejected" });
+    }
     const entry = {
       id: Date.now(),
       query: dec.query,
-      type: dec.type,
+      type: finalType,
       recommendation: result.recommendation || "",
       date: new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short" }),
       regret: null,
@@ -698,7 +774,7 @@ export default function App() {
             DecideOS
           </div>
           {profile && (
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div className="header-right" style={{display:"flex",alignItems:"center",gap:8}}>
               <button className="priority-chip" onClick={() => setEditingProfile(true)} title="Change your profile">
                 <span className="priority-chip-dot" />
                 <strong>{profile.priority}</strong>
@@ -823,8 +899,8 @@ export default function App() {
                   {output.recommendation && (
                     <div className="card c-rec">
                       <div className="card-top">
-                        <div className="card-ico">✅</div>
-                        <div className="card-ttl">Recommendation</div>
+                        <div className="card-ico">{output.isRejected ? "🚫" : "✅"}</div>
+                        <div className="card-ttl">{output.isRejected ? "System Message" : "Recommendation"}</div>
                       </div>
                       <div className="card-body">{output.recommendation}</div>
                     </div>
